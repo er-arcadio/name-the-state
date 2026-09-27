@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Name the State</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f1623; color: #e2e8f0; }
+    #quiz-wrap { padding: 1rem 1.25rem; }
+    #map-container { position: relative; width: 100%; }
+    #us-map { width: 100%; height: auto; display: block; }
+    .state-path { fill: #6b7a8d; stroke: #ffffff; stroke-width: 1.5; cursor: pointer; transition: fill 0.15s; }
+    .state-path:hover { fill: #378ADD; }
+    .state-path.answered { fill: #4a5568; }
+    .state-path.answered:hover { fill: #378ADD; }
+    .state-path.selected { fill: #185FA5 !important; }
+    .state-path.correct { fill: #639922 !important; cursor: default; }
+    .state-path.correct:hover { fill: #639922 !important; }
+    .state-path.wrong { fill: #E24B4A !important; cursor: default; }
+    .state-path.wrong:hover { fill: #E24B4A !important; }
+    .state-label { font-size: 8.5px; fill: #fff; font-family: inherit; pointer-events: none; text-anchor: middle; dominant-baseline: middle; font-weight: 700; }
+    .state-label-strike { font-size: 7px; fill: rgba(255,255,255,0.8); font-family: inherit; pointer-events: none; text-anchor: middle; dominant-baseline: middle; font-weight: 500; text-decoration: line-through; }
+    .label-line { stroke: #fff; stroke-width: 0.9; opacity: 0.8; pointer-events: none; }
+    #top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+    #timer-wrap { display: flex; align-items: center; gap: 8px; }
+    #timer-display { font-size: 20px; font-weight: 500; color: #e2e8f0; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+    #timer-display.warning { color: #E24B4A; }
+    #timer-label { font-size: 12px; color: #94a3b8; }
+    #popup {
+      position: absolute;
+      background: rgba(15, 20, 35, 0.82);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px;
+      padding: 13px 15px;
+      display: none;
+      z-index: 10;
+      min-width: 190px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.45);
+    }
+    #popup h3 { font-size: 12px; color: rgba(255,255,255,0.55); font-weight: 400; margin-bottom: 7px; }
+    #popup-input {
+      width: 100%; font-size: 14px; padding: 6px 9px;
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 6px;
+      background: rgba(255,255,255,0.08);
+      color: #fff; outline: none;
+    }
+    #popup-input::placeholder { color: rgba(255,255,255,0.35); }
+    #popup-input:focus { border-color: rgba(100,170,255,0.6); }
+    #popup-actions { display: flex; gap: 6px; margin-top: 8px; }
+    #popup-actions button {
+      flex: 1; font-size: 13px; padding: 5px 0;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: transparent; color: rgba(255,255,255,0.75); cursor: pointer;
+    }
+    #popup-actions button:hover { background: rgba(255,255,255,0.1); }
+    #popup-submit { border-color: rgba(100,170,255,0.5) !important; color: #78b4ff !important; }
+    #grace-banner { display: none; background: #faeeda; border: 0.5px solid #EF9F27; border-radius: 6px; padding: 7px 12px; font-size: 13px; color: #633806; margin-bottom: 8px; }
+    #controls { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; flex-wrap: wrap; gap: 8px; }
+    #progress { font-size: 13px; color: #94a3b8; }
+    #grade-btn { font-size: 14px; padding: 7px 18px; border-radius: 6px; border: none; background: #3B6D11; color: #fff; cursor: pointer; opacity: 0.45; transition: background 0.15s, opacity 0.15s; }
+    #grade-btn:hover { background: #27500A; }
+    #grade-btn.ready { opacity: 1; }
+    #score-bar { margin-top: 14px; display: none; }
+    #score-display { font-size: 22px; font-weight: 500; color: #e2e8f0; margin-bottom: 4px; }
+    #score-sub { font-size: 13px; color: #94a3b8; }
+    #legend { display: flex; gap: 14px; margin-top: 10px; flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #94a3b8; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+    #reset-btn { font-size: 13px; padding: 5px 12px; border-radius: 6px; border: 1px solid #334155; background: transparent; color: #94a3b8; cursor: pointer; margin-left: auto; }
+    #reset-btn:hover { background: #1e293b; }
+  </style>
+</head>
+<body>
+<div id="quiz-wrap">
+  <div id="top-bar">
+    <div id="timer-wrap">
+      <span id="timer-label">Time remaining</span>
+      <span id="timer-display">10:00</span>
+    </div>
+    <span id="progress">0 / 50 answered</span>
+  </div>
+  <div id="grace-banner">Time's up! Finish your current answer and it will be submitted.</div>
+  <div id="map-container">
+    <svg id="us-map" viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg">
+      <g id="states-group"></g>
+      <g id="labels-group"></g>
+    </svg>
+    <div id="popup">
+      <h3 id="popup-label">Which state is this?</h3>
+      <input id="popup-input" type="text" placeholder="Type state name..." autocomplete="off" spellcheck="false" />
+      <div id="popup-actions">
+        <button id="popup-cancel">Cancel</button>
+        <button id="popup-submit">Submit</button>
+      </div>
+    </div>
+  </div>
+  <div id="controls">
+    <button id="grade-btn">Grade my answers</button>
+  </div>
+  <div id="score-bar">
+    <div id="score-display"></div>
+    <div id="score-sub"></div>
+    <div id="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#639922"></div> Correct</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#E24B4A"></div> Incorrect / not guessed</div>
+    </div>
+    <button id="reset-btn">Try again</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script>
+const STATE_NAMES = {
+  "01":"Alabama","02":"Alaska","04":"Arizona","05":"Arkansas","06":"California",
+  "08":"Colorado","09":"Connecticut","10":"Delaware","12":"Florida","13":"Georgia",
+  "15":"Hawaii","16":"Idaho","17":"Illinois","18":"Indiana","19":"Iowa",
+  "20":"Kansas","21":"Kentucky","22":"Louisiana","23":"Maine","24":"Maryland",
+  "25":"Massachusetts","26":"Michigan","27":"Minnesota","28":"Mississippi","29":"Missouri",
+  "30":"Montana","31":"Nebraska","32":"Nevada","33":"New Hampshire","34":"New Jersey",
+  "35":"New Mexico","36":"New York","37":"North Carolina","38":"North Dakota","39":"Ohio",
+  "40":"Oklahoma","41":"Oregon","42":"Pennsylvania","44":"Rhode Island","45":"South Carolina",
+  "46":"South Dakota","47":"Tennessee","48":"Texas","49":"Utah","50":"Vermont",
+  "51":"Virginia","53":"Washington","54":"West Virginia","55":"Wisconsin","56":"Wyoming"
+};
+
+const CALLOUT_STATES = new Set(["09","10","12","15","24","25","33","34","44","50","51"]);
+const CALLOUT_OFFSETS = {
+  "09":[42,-28],"10":[42,18],"12":[40,50],"15":[-30,50],
+  "24":[42,24],"25":[52,-32],"33":[44,-22],"34":[44,8],
+  "44":[52,10],"50":[-42,-28],"51":[10,32]
+};
+
+const userAnswers = {};
+let graded = false, selectedFips = null, centroids = {};
+let timerInterval = null, secondsLeft = 600, timeExpired = false, graceMode = false;
+
+function levenshtein(a, b) {
+  a = a.toLowerCase(); b = b.toLowerCase();
+  const m = a.length, n = b.length;
+  const dp = Array.from({length:m+1},(_,i)=>Array.from({length:n+1},(_,j)=>j===0?i:(i===0?j:0)));
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++)
+    dp[i][j]=a[i-1]===b[j-1]?dp[i-1][j-1]:1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+  return dp[m][n];
+}
+
+function isClose(guess, answer) {
+  guess = guess.trim().toLowerCase(); answer = answer.toLowerCase();
+  if (guess === answer) return true;
+  return levenshtein(guess, answer) <= (answer.length <= 6 ? 1 : 2);
+}
+
+function formatTime(s) { return `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`; }
+
+function startTimer() {
+  const display = document.getElementById('timer-display');
+  timerInterval = setInterval(() => {
+    secondsLeft--;
+    display.textContent = formatTime(secondsLeft);
+    if (secondsLeft <= 60) display.classList.add('warning');
+    if (secondsLeft <= 0) { clearInterval(timerInterval); timerInterval = null; timeExpired = true; onTimeUp(); }
+  }, 1000);
+}
+
+function onTimeUp() {
+  if (document.getElementById('popup').style.display === 'block') {
+    graceMode = true;
+    document.getElementById('grace-banner').style.display = 'block';
+    document.getElementById('popup-cancel').style.display = 'none';
+  } else { gradeAnswers(); }
+}
+
+function updateProgress() {
+  const count = Object.keys(userAnswers).length;
+  document.getElementById('progress').textContent = `${count} / 50 answered`;
+  document.getElementById('grade-btn').classList.toggle('ready', count > 0);
+}
+
+function buildCalloutLabel(g, fips, cx, cy, topText, strikeText) {
+  const off = CALLOUT_OFFSETS[fips] || [42,-20];
+  const lx = cx+off[0], ly = cy+off[1];
+  const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+  line.setAttribute('x1',cx); line.setAttribute('y1',cy);
+  line.setAttribute('x2',lx); line.setAttribute('y2',ly);
+  line.setAttribute('class','label-line'); g.appendChild(line);
+  const longest = strikeText && strikeText.length > topText.length ? strikeText : topText;
+  const charW = Math.max(longest.length*5.2,22), rectH = strikeText ? 18 : 12;
+  const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+  rect.setAttribute('x',lx-charW/2-3); rect.setAttribute('y',ly-rectH/2);
+  rect.setAttribute('width',charW+6); rect.setAttribute('height',rectH);
+  rect.setAttribute('rx',2.5); rect.setAttribute('fill','rgba(10,16,30,0.84)');
+  g.appendChild(rect);
+  const t1 = document.createElementNS('http://www.w3.org/2000/svg','text');
+  t1.setAttribute('x',lx); t1.setAttribute('y',strikeText ? ly-3.5 : ly);
+  t1.setAttribute('class','state-label'); t1.textContent = topText; g.appendChild(t1);
+  if (strikeText) {
+    const t2 = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t2.setAttribute('x',lx); t2.setAttribute('y',ly+5);
+    t2.setAttribute('class','state-label-strike'); t2.textContent = strikeText; g.appendChild(t2);
+  }
+}
+
+function buildInlineLabel(g, cx, cy, topText, strikeText) {
+  const t1 = document.createElementNS('http://www.w3.org/2000/svg','text');
+  t1.setAttribute('x',cx); t1.setAttribute('y',strikeText ? cy-4 : cy);
+  t1.setAttribute('class','state-label'); t1.textContent = topText; g.appendChild(t1);
+  if (strikeText) {
+    const t2 = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t2.setAttribute('x',cx); t2.setAttribute('y',cy+5.5);
+    t2.setAttribute('class','state-label-strike'); t2.textContent = strikeText; g.appendChild(t2);
+  }
+}
+
+function renderLabel(fips, topText, strikeText) {
+  const labelsG = document.getElementById('labels-group');
+  const old = labelsG.querySelector(`[data-label="${fips}"]`);
+  if (old) old.remove();
+  if (!topText) return;
+  const [cx,cy] = centroids[fips]||[0,0];
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.setAttribute('data-label',fips);
+  if (CALLOUT_STATES.has(fips)) buildCalloutLabel(g,fips,cx,cy,topText,strikeText||null);
+  else buildInlineLabel(g,cx,cy,topText,strikeText||null);
+  labelsG.appendChild(g);
+}
+
+function saveCurrentInput() {
+  const val = document.getElementById('popup-input').value.trim();
+  if (!val||!selectedFips) return;
+  userAnswers[selectedFips] = val;
+  const path = document.querySelector(`[data-fips="${selectedFips}"]`);
+  if (path) path.classList.add('answered');
+  renderLabel(selectedFips,val,null); updateProgress();
+}
+
+function showPopup(fips, pathEl) {
+  if (graded||timeExpired) return;
+  const existing = userAnswers[fips]; selectedFips = fips;
+  const popup = document.getElementById('popup');
+  document.getElementById('popup-label').textContent = existing ? `Change answer (was: "${existing}")` : 'Which state is this?';
+  document.getElementById('popup-input').value = existing||'';
+  const wrapRect = document.getElementById('map-container').getBoundingClientRect();
+  const bbox = pathEl.getBoundingClientRect();
+  let left = bbox.left-wrapRect.left+bbox.width/2-95;
+  let top  = bbox.top-wrapRect.top+bbox.height/2-10;
+  left = Math.max(0,Math.min(left,wrapRect.width-210));
+  top  = Math.max(0,Math.min(top,wrapRect.height-130));
+  popup.style.left=left+'px'; popup.style.top=top+'px'; popup.style.display='block';
+  document.querySelectorAll('.state-path.selected').forEach(p=>p.classList.remove('selected'));
+  pathEl.classList.add('selected');
+  setTimeout(()=>document.getElementById('popup-input').focus(),50);
+}
+
+function closePopup(andSave) {
+  if (andSave) saveCurrentInput();
+  document.getElementById('popup').style.display='none';
+  document.getElementById('popup-cancel').style.display='';
+  document.querySelectorAll('.state-path.selected').forEach(p=>p.classList.remove('selected'));
+  selectedFips=null;
+  if (graceMode) { graceMode=false; document.getElementById('grace-banner').style.display='none'; gradeAnswers(); }
+}
+
+function submitGuess() {
+  const val = document.getElementById('popup-input').value.trim();
+  if (!val) { if (graceMode) closePopup(false); return; }
+  userAnswers[selectedFips]=val;
+  const path = document.querySelector(`[data-fips="${selectedFips}"]`);
+  if (path) path.classList.add('answered');
+  renderLabel(selectedFips,val,null); closePopup(false); updateProgress();
+}
+
+function gradeAnswers() {
+  if (graded) return; graded=true;
+  if (timerInterval) { clearInterval(timerInterval); timerInterval=null; }
+  document.getElementById('labels-group').innerHTML='';
+  let correct=0;
+  document.querySelectorAll('.state-path').forEach(path => {
+    const fips=path.dataset.fips, answer=STATE_NAMES[fips], guess=userAnswers[fips]||'';
+    const ok=guess&&isClose(guess,answer);
+    path.classList.remove('answered','selected');
+    path.classList.add(ok?'correct':'wrong'); path.title=answer;
+    if (ok) { correct++; renderLabel(fips,guess,null); }
+    else { renderLabel(fips,answer,guess||null); }
+  });
+  document.getElementById('score-bar').style.display='block';
+  document.getElementById('score-display').textContent=`${correct} / 50 states correct`;
+  const pct=Math.round((correct/50)*100);
+  const msgs=[[50,"Keep practicing — you'll get there!"],[70,"Not bad! A solid start."],[85,"Great job — you know your states!"],[95,"Excellent! Nearly perfect."],[101,"Perfect score! A true geography whiz."]];
+  document.getElementById('score-sub').textContent=msgs.find(([t])=>pct<t)[1];
+  document.getElementById('grade-btn').style.display='none';
+  document.getElementById('grace-banner').style.display='none';
+}
+
+function resetQuiz() {
+  Object.keys(userAnswers).forEach(k=>delete userAnswers[k]);
+  graded=false; timeExpired=false; graceMode=false; secondsLeft=600;
+  document.querySelectorAll('.state-path').forEach(p=>p.classList.remove('answered','correct','wrong','selected'));
+  document.getElementById('labels-group').innerHTML='';
+  document.getElementById('score-bar').style.display='none';
+  document.getElementById('grade-btn').style.display='';
+  document.getElementById('grade-btn').classList.remove('ready');
+  document.getElementById('timer-display').textContent='10:00';
+  document.getElementById('timer-display').classList.remove('warning');
+  document.getElementById('grace-banner').style.display='none';
+  document.getElementById('popup-cancel').style.display='';
+  updateProgress(); if (timerInterval) clearInterval(timerInterval); startTimer();
+}
+
+async function initMap() {
+  const res = await fetch('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json');
+  const us = await res.json();
+  const states = topojson.feature(us,us.objects.states);
+  const svg = d3.select('#us-map');
+  const projection = d3.geoAlbersUsa().scale(1280).translate([480,300]);
+  const path = d3.geoPath().projection(projection);
+  svg.select('#states-group').selectAll('path')
+    .data(states.features).enter().append('path')
+    .attr('class','state-path').attr('d',path)
+    .attr('data-fips',d=>d.id.toString().padStart(2,'0'))
+    .each(function(d){centroids[d.id.toString().padStart(2,'0')]=path.centroid(d);})
+    .on('click',function(event,d){
+      if (graded||timeExpired) return;
+      const fips=d.id.toString().padStart(2,'0');
+      const popup=document.getElementById('popup');
+      if (popup.style.display==='block'&&!graceMode) { saveCurrentInput(); showPopup(fips,this); }
+      else showPopup(fips,this);
+    });
+  startTimer();
+}
+
+initMap();
+document.getElementById('popup-submit').onclick=submitGuess;
+document.getElementById('popup-cancel').onclick=()=>closePopup(false);
+document.getElementById('popup-input').addEventListener('keydown',e=>{
+  if(e.key==='Enter') submitGuess();
+  if(e.key==='Escape'&&!graceMode) closePopup(false);
+});
+document.getElementById('grade-btn').onclick=()=>{if(document.getElementById('grade-btn').classList.contains('ready')) gradeAnswers();};
+document.getElementById('reset-btn').onclick=resetQuiz;
+document.getElementById('map-container').addEventListener('mousedown',e=>{
+  const popup=document.getElementById('popup');
+  if(popup.style.display==='block'&&!popup.contains(e.target)&&e.target.tagName!=='path'&&!graceMode) closePopup(true);
+});
+</script>
+</body>
+</html>
